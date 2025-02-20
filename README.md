@@ -4,9 +4,9 @@ This repository contains R codes using OpenMx to perform dual change score model
 by Peggy Ler, Jonathan K. L. Mak, Chandra A. Reynolds, Alexander Ploner, Nancy L. Pedersen, Juulia Jylhävä, Anna K. Dahl Aslan, Deborah Finkel, and Ida K. Karlsson.
 
 # CONTENTS
-Main script
-Readme 
+- Main script
+- Readme 
 
 # REQUIREMENTS
-R 4.x 
-Packages: OpenMx, dplyr, haven
+- R 4.x 
+- Packages: OpenMx, dplyr, haven
