@@ -11,7 +11,7 @@
 
 
 
-<title>DCSM_v2.knit</title>
+<title>DCSM_v3.knit</title>
 
 <script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
 // be compatible with the behavior of Pandoc < 2.8).
@@ -390,8 +390,8 @@ library(data.table)# For data handling</code></pre>
 <h1>2. Data Loading &amp; Preparation</h1>
 <p>Here is your <strong>full</strong> data import, filtering,
 duplication checks, pivoting, and descriptive steps.</p>
-<pre class="r"><code>## Read Data
-FI &lt;- read.delim(&quot;file name&quot;, stringsAsFactors = TRUE)
+<pre class="r"><code>## Load Data
+fidf &lt;- read.delim(&quot;file name&quot;, stringsAsFactors = TRUE)
 
 ## Prepare Data
 ## Select Variables
@@ -411,28 +411,29 @@ id_counts &lt;- df %&gt;%
 
 table(id_counts$count)
 
-## Create age bins
+## Check age range, create age bins
 summary(df$age)
 
 df$age_interv &lt;- cut(df$age, breaks = seq(38, 102, by = 2), right = FALSE)
 table(df$age_interv)
 
-## Check BMI, FI data by bin
+## Check BMI, FI data availability by bin
 table(df$age_interv[!is.na(df$bmi)])
 table(df$age_interv[!is.na(df$fi)])
 
-## Restrict age
+## Restrict age to 50 - 96
 df &lt;- subset(df, !(age &lt; 50 | age &gt;= 96 | is.na(age)))
 summary(df$age)
 
 labels &lt;- seq(52, 96, by = 2)
 df$age_interv &lt;- cut(df$age, breaks = seq(50, 96, by = 2), right = FALSE, labels = labels)
 
+## Checking age_interv variable
 summary(df$age_interv)
 nrow(df)
 length(unique(df$twinnr))
 
-## Duplication checks
+## Ensure each age bin has &lt;=1 BMI or FI observation
 dup_check &lt;- df %&gt;%
   group_by(twinnr, age_interv) %&gt;%
   summarise(bmi_count = sum(!is.na(bmi)), fi_count = sum(!is.na(fi))) %&gt;%
@@ -444,7 +445,7 @@ if (nrow(dup_check) &gt; 0) {
   print(&quot;Each subject has at most one BMI or one FI reading in each age interval.&quot;)
 }
 
-## Identify duplicates
+## Identify &gt;1 observations
 identify_duplicates &lt;- function(data) {
   bmi_present &lt;- sum(!is.na(data$bmi)) &gt; 1
   fi_present  &lt;- sum(!is.na(data$fi))  &gt; 1
@@ -489,7 +490,7 @@ if (nrow(dup_check2) &gt; 0) {
   print(&quot;Each subject has at most one BMI or one FI reading in each age interval.&quot;)
 }
 
-## Final info
+## Checking finalized data
 nrow(df_filtered)
 length(unique(df_filtered$twinnr))
 
@@ -515,6 +516,9 @@ id_countsfi &lt;- df_filtered %&gt;%
 table(id_countsfi$count)
 nrow(id_countsfi)
 
+## Decide age range for DCSM based on data counts for each age bin
+## DCSM - 60 - 91.9 
+
 ## Create wide format
 df3 &lt;- df_filtered[, c(&quot;twinnr&quot;, &quot;pairid&quot;, &quot;age_interv&quot;, &quot;sex&quot;, &quot;educ&quot;,
                        &quot;ever_smoke&quot;, &quot;fi&quot;, &quot;bmi&quot;, &quot;study1&quot;)]
@@ -530,16 +534,12 @@ df_filled &lt;- df_filled %&gt;%
   group_by(twinnr) %&gt;%
   fill(educ, .direction = &quot;downup&quot;)
 
+## Checking dataser
 summary(df_filled)
 nrow(df_filled)
-
 table(df_filled$age_interv)
 
-mean_value &lt;- mean(df_filled$fi[df_filled$age_interv == 52], na.rm = TRUE)
-sd_value   &lt;- sd(df_filled$fi[df_filled$age_interv == 52], na.rm = TRUE)
-
-df_filled$fistd &lt;- (df_filled$fi - mean_value) / sd_value
-
+## Actual conversion from long to wide
 fidf_wide &lt;- df_filled %&gt;%
   pivot_wider(id_cols= c(&quot;twinnr&quot;, &quot;pairid&quot;, &quot;sex&quot;, &quot;educ&quot;,
                          &quot;ever_smoke&quot;, &quot;study1&quot;), 
@@ -547,70 +547,13 @@ fidf_wide &lt;- df_filled %&gt;%
               values_from = c(bmi, fi, fistd), 
               names_glue =&quot;{.value}_{age_interv}&quot;)
 
+## Checking and renaming file
 nrow(fidf_wide)
 summary(fidf_wide)
-
 fidf &lt;- fidf_wide
 nrow(fidf)
 
 save(fidf, file=&quot;filename&quot;)
-
-## Describe data for 60 - 91.9
-df_filtered &lt;- subset(fidf, !(age &lt; 60 | age &gt; 92 | is.na(age)))
-
-library(tableone)
-
-variables &lt;- df_filtered[, c(&quot;age&quot;, &quot;sex&quot;, &quot;ever_smoke&quot;, &quot;fi&quot;, &quot;bmi&quot;, &quot;study1&quot;)]
-vars &lt;- names(variables)
-
-table1 &lt;- CreateTableOne(vars = vars, factorVars = c(&quot;sex&quot;,&quot;ever_smoke&quot;,&quot;study1&quot;),
-                         data = variables, addOverall = TRUE, test = FALSE)
-
-print(table1, catDigits=1, contDigits=1,
-      formatOptions=list(big.mark=&quot;,&quot;, scientific=FALSE))
-
-table1.one1 &lt;- print(table1, contDigits=1, noSpaces=TRUE, printToggle=FALSE) %&gt;% 
-  as_tibble(rownames=&quot;Characteristics&quot;)
-
-table1.one1
-
-unique_count &lt;- length(unique(df_filtered$twinnr))
-print(unique_count)
-
-id_counts &lt;- df_filtered %&gt;%
-  group_by(twinnr) %&gt;%
-  summarize(count = n())
-
-table(id_counts$count)
-
-df3 &lt;- df_filtered[, c(&quot;twinnr&quot;, &quot;pairid&quot;, &quot;age_interv&quot;, &quot;sex&quot;, &quot;educ&quot;,
-                       &quot;ever_smoke&quot;, &quot;fi&quot;, &quot;bmi&quot;, &quot;study1&quot;)]
-
-nrow(df3)
-length(unique(df3$twinnr))
-
-df_filled &lt;- df_filtered %&gt;%
-  group_by(twinnr) %&gt;%
-  fill(ever_smoke, .direction = &quot;downup&quot;)
-
-df_filled &lt;- df_filled %&gt;%
-  group_by(twinnr) %&gt;%
-  fill(educ, .direction = &quot;downup&quot;)
-
-summary(df_filled)
-nrow(df_filled)
-
-df_first_obs &lt;- df_filled %&gt;%
-  group_by(twinnr) %&gt;%
-  filter(age == min(age)) %&gt;%
-  ungroup()
-
-mean(df_first_obs$bmi, na.rm=TRUE)
-sd(df_first_obs$bmi, na.rm=TRUE)
-mean(df_first_obs$fi,  na.rm=TRUE)
-sd(df_first_obs$fi,   na.rm=TRUE)
-mean(df_first_obs$age, na.rm=TRUE)
-sd(df_first_obs$age,  na.rm=TRUE)
 
 ## Covariates
 fidf$pairid &lt;- as.factor(fidf$pairid)
